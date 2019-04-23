@@ -3,24 +3,24 @@
 import os, sys
 import numpy as np
 import glob
-import string
+#import string
 import matplotlib
-
+import geopandas
 #matplotlib.use('Agg')
 from matplotlib.pyplot import cm 
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
-import matplotlib.path as mpath
-import matplotlib.patches as mpatches
-from matplotlib.collections import PatchCollection
-from pylab import *
+#import matplotlib.path as mpath
+#import matplotlib.patches as mpatches
+#from matplotlib.collections import PatchCollection
+#from pylab import *
 from datetime import datetime
-from pprint import pprint
+#from pprint import pprint
 from netCDF4 import Dataset, date2num,num2date
 from scipy.ndimage.filters import gaussian_filter
 import ogr
-import osr
-
+#import osr
+import time
 
 __author__   = 'Trond Kristiansen'
 __email__    = 'me (at) trondkristiansen.com'
@@ -48,16 +48,19 @@ def createBins(requiredResolution):
     deg2rad=np.pi/180.
     R = 6371  # radius of the earth in km
     # Distance from minimum to maximim longitude
-    x = (xmax*deg2rad - xmin*deg2rad) * cos( 0.5*(ymax*deg2rad+ymax*deg2rad) )
-    y =  ymax*deg2rad - ymax*deg2rad
-    dx = R * sqrt( x*x + y*y )
+    def get_dist(xx,yy): 
+        return R * np.sqrt( xx**2 + yy**2 )
+
+    xmaxrad = xmax*deg2rad
+    xminrad = xmin*deg2rad
+    ymaxrad = ymax*deg2rad
+    yminrad = ymin*deg2rad   
+
+    dx = get_dist((xmaxrad - xminrad) * np.cos(ymaxrad),0)
     print("Distance from minimum to maximim longitude binned area is %s km"%(dx))
 
     # Distance from minimum to maximim latitude
-    x = (xmax*deg2rad - xmax*deg2rad) * cos( 0.5*(ymax*deg2rad+ymin*deg2rad) )
-    y =  ymax*deg2rad - ymin*deg2rad
-    dy = R * sqrt( x*x + y*y )
-
+    dy = get_dist(0,ymaxrad-yminrad)   
     print("Distance from minimum to maximim latitude binned area is %s km"%(dy))
 
     ngridx = int(np.round(dx/requiredResolution,0))
@@ -75,148 +78,159 @@ def calculateAreaAverages(xi,yi,cdf,weeksInYear):
     print('func: calculateAreaAverages() => Calculating averages within bins')
     print('=> binned domain (%2.1f,%2.1f) to (%2.1f,%2.1f)'%(np.min(xi),np.min(yi),np.max(xi),np.max(yi)))
 
-    timesteps = cdf.variables['time'][:]
-    timeunits = cdf.variables["time"].units
-    
+    timesteps = cdf['time']
+    #timeunits = cdf["time"].units    
     print('=> found %s timesteps in input file'%(len(timesteps)))
-    newWeek=-9
+    newWeek=-9  
+    nWeeksWithData = []
 
     for tindex, t in enumerate(timesteps): 
-        currentDate = num2date(t, units=timeunits, calendar="gregorian")
-        year,weekNumber,DOW = currentDate.isocalendar()
-       
-        Xpos = cdf.variables['lon'][:,tindex]
-        Ypos = cdf.variables['lat'][:,tindex]
-        
+        currentDate = t.values
+        #currentDate = num2date(t, units=timeunits, calendar="gregorian")
+        weekNumber = t.dt.week.values #isocalendar()
+
+        # should be faster to add weeknumber as a column
+        # then to group by week number and find the sum ?
+
+        Xpos = cdf.coords['lon'][:,tindex].values
+        Ypos = cdf['lat'][:,tindex].values               
         H, xedges, yedges = np.histogram2d(Xpos, Ypos, bins=(xi, yi), normed=False)
         
         if (tindex==0):
-            weeklyFrequency=np.zeros((weeksInYear,np.shape(H)[0],np.shape(H)[1]), dtype=float32)
+            weeklyFrequency=np.zeros((weeksInYear,np.shape(H)[0],np.shape(H)[1]), dtype=np.float32)
             print("Inside t==0")
-        if weekNumber != newWeek:
-            print("=> Adding data to week: %s (startdate: %s)"%(weekNumber,currentDate))
-            weeklyFrequency[weekNumber,:,:]=weeklyFrequency[weekNumber,:,:] + H
-            newWeek=weekNumber
 
+        if weekNumber != newWeek:
+            #print("=> Adding data to week: %s (startdate: %s)"%(weekNumber,currentDate))
+            weeklyFrequency[weekNumber,:,:] += H
+            newWeek=weekNumber
+            nWeeksWithData.append(weekNumber)
+    
     # Create log values and levels for frequencyplot
     #weeklyFrequency=ma.log(weeklyFrequency)
-    levels = np.arange(weeklyFrequency.min(),weeklyFrequency.max(),(weeklyFrequency.max()-weeklyFrequency.min())/10)
-    print(levels)
-    sigma = 0.2 # this depends on how noisy your data is, play with it!
+    ##weekfmin = weeklyFrequency.min()
+    ##weekfmax = weeklyFrequency.max()
+    ##levels = np.arange(weekfmin,weekfmax,(weekfmax-weekfmin)/10)
+    #print(levels)
+    return gaussian_filter(weeklyFrequency, sigma),nWeeksWithData
 
-    return gaussian_filter(weeklyFrequency, sigma)
-
-def plotDistribution(kelpData,week,baseout,xii,yii,distType):
+def plotDistribution(kelpData,week,baseout,xii,yii,distType,polygons):
     print("Plotting the distributions for week: %s"%(week))
     plt.clf()
     plt.figure(figsize=(10,10), frameon=False)
     ax = plt.subplot(111)
 
     mymap = Basemap(llcrnrlon=17.0, llcrnrlat=69.4,
-                    urcrnrlon=19.0, urcrnrlat=70.0,resolution='f', 
+                    urcrnrlon=19.0, urcrnrlat=70.0,resolution='h', 
                     projection='merc')
 
     x, y = mymap(xii, yii)
     #levels=np.arange(np.min(kelpData),np.max(kelpData),10)
-    levels=np.arange(1,100,5)
-                              
-    CS1 = mymap.contourf(x,y,np.fliplr(np.rot90(kelpData,3)),
-    levels,cmap=cm.get_cmap('Spectral_r',len(levels)-1), 
-    extend='max',alpha=1.0)
+    levels = np.arange(1,100,1)
+    cblevels = np.arange(10,110,10)  
+    z = np.fliplr(np.rot90(kelpData,3))       
+    CS1 = mymap.contourf(x,y,z,levels,cmap=cm.get_cmap('Spectral_r',len(levels)-1), extend='max', alpha=1.0)
+    CS2 = mymap.contour(x,y,z,cblevels, colors = 'k', linestyle = '--',linewidths = 0.1)
 
-    plt.colorbar(CS1,orientation='vertical',extend='max', shrink=0.5)
+    plt.colorbar(CS1,orientation='vertical',extend='max', shrink=0.5,ticks = cblevels)
 
     mymap.drawcoastlines()
     mymap.fillcontinents(color='grey',zorder=2)
-    mymap.drawcountries()
-    mymap.drawmapboundary()
+    #mymap.drawcountries()
+    #mymap.drawmapboundary()
 
-    plt.title('Kelp week: %s'%(week))
-    if distType=="integrated":
+    plt.title('Kelp week: {}-{} , polygons: {}-{}'.format(min(week),max(week),min(polygons),max(polygons)))
+    if distType == "integrated":
         plotfile=baseout+'/Kelp_distribution_all_fullperiod.png'
     else:
-        plotfile=baseout+'/Kelp_distribution_all_week_'+str(week)+'.png'
+        plotfile=baseout+'/Kelp_distribution_all_week_'+str(week)+'polygons_{}-{}'.format(min(polygons),max(polygons))+'.png'
     print("=> Creating plot %s"%(plotfile))             
     plt.savefig(plotfile,dpi=300)
  
-def main():
+def main(shapefile,experiment,distType = "integrated",polygons = None,requiredResolution = 1.):
     # Which species to calculate for
-    # The timespan part of the filename
-
-    shapefile = '/Users/trondkr/Dropbox/NIVA/KelpFloat/Kelp/Shapefile/Shapefile05112018/kelpExPol_11sept2018.shp'
-    experiment = 1
-
-    if experiment == 1:
-        startdate = '01052016'
-        enddate = '01082016'
-    if experiment == 2:
-        startdate = '01032016'
-        enddate = '15052016'
-    if experiment == 3:
-        startdate = '01112015'
-        enddate = '01042016'
-    if experiment == 4:
-        startdate = '01052016'
-        enddate = '01082016'
-
-    # Results and storage folders
-    base='results15012019'
-    baseout='distributionFigures'
-    
-    if not os.path.exists(baseout): os.makedirs(baseout)
-
-    # The resolution of the output grid in kilometers
-    requiredResolution = 1.000 # km between each binned box
-
-    # END EDIT ----------------------------------
+    # The timespan is part of the filename
+    ranges = {1:['01052016','01082016'],2:['01032016','15052016'],
+              3:['01112015','01042016'],4:['01052016','01082016']}
+    startdate,enddate = ranges[experiment]
 
     # Create the grid you want to calculate frequency on
+    # The resolution of the output grid in km between each binned box
     xi,yi = createBins(requiredResolution)
-    weeksInYear=52
+
     xii,yii=np.meshgrid(xi[:-1],yi[:-1])
 
-    s = ogr.Open(shapefile)
-    for layer in s:
-        polygons = [x + 1 for x in range(layer.GetFeatureCount()-1)]
-       # polygons=[1,2]
-  
-    allData=np.zeros((len(polygons),weeksInYear,len(xi)-1,len(yi)-1))
-    print("=> Created final array for all data of size :",np.shape(allData))
-        
-    for polygonIndex, polygon in enumerate(polygons):
-        infile = base+'/Kelp_polygon_%s_experiment_%s_%s_to_%s.nc' % (polygon, experiment, startdate, enddate)
+    if polygons == None:
+        s = geopandas.read_file(shapefile)
+        polygons = s.index.values[:-2] + 1
 
-        print("=> Opening input file: %s"%(infile))
+    ###s = ogr.Open(shapefile)
+    #for layer in s:
+    #    polygons = [x + 1 for x in range(layer.GetFeatureCount()-1)]
+    #    print ('layer',layer.GetFeatureCount())
+    #   # polygons=[1,2]
+
+    allData=np.zeros((len(polygons),weeksInYear,len(xi)-1,len(yi)-1))
+
+    print("=> Created final array for all data of size :",np.shape(allData))
+    '''for polygonIndex, polygon in enumerate(polygons): '''   
+    import xarray as xr
+    infiles = [base+'/Kelp_polygon_%s_experiment_%s_%s_to_%s.nc' % (polygon, experiment, 
+                startdate, enddate) for polygonIndex, polygon in enumerate(polygons)] 
+
+    for index,infile in enumerate(infiles):
+    #for polygonIndex, polygon in enumerate(polygons):
+    #    infile = base+'/Kelp_polygon_%s_experiment_%s_%s_to_%s.nc' % (polygon, experiment, startdate, enddate)
+    #    
         if os.path.exists(infile):
-            cdf = Dataset(infile)
-            allData[polygonIndex,:,:,:]=calculateAreaAverages(xi,yi,cdf,weeksInYear)
+            print("=> Opening input file: %s"%(infile))
+            cdf = xr.open_dataset(infile) 
+            #cdf = Dataset(infile)
+            allData[index,:,:,:],nWeeksWithData = calculateAreaAverages(xi,yi,cdf,weeksInYear)
             cdf.close()
         else:
             print("==>> Input file %s could not be opened"%(infile))
-    
-   # 
-        
-    for week in range(1,weeksInYear,1):
-        # Calculate the cumulative distribution for each week
-        kelpData=np.squeeze(np.sum(allData[:,week,:,:], axis=0))
-        #print("1", allData[0,week,10,10])
-        #print("2", allData[1,week,10,10])
-       
-      #  print("4", np.ma.sum(allData[:,week,10,10], axis=0))
-      #  print(np.ma.min(kelpData),np.ma.max(kelpData))
-        levels=np.arange(np.ma.min(kelpData),np.ma.max(kelpData),0.5)
-      
-        if (len(levels)>2 and np.ma.mean(kelpData)>0):
-            print("Kelp data {}".format(np.shape(kelpData)))
-        #    plotDistribution(kelpData,week,baseout,xii,yii,"weekly")
-            
-    # Plot the distribution for all weeks
-    kelpData=np.squeeze(np.ma.sum(allData[:,:,:,:], axis=0))
-    print("LAST Kelp data {}".format(np.shape(kelpData)))
-    kelpData=np.ma.masked_where(kelpData==0,kelpData)
-    kelpData=np.squeeze(np.ma.sum(kelpData[:,:,:], axis=0))
-    plotDistribution(kelpData,week,baseout,xii,yii,"integrated")
+
+    if distType == "weekly": 
+        for week in range(1,weeksInYear,1):
+            # Calculate the cumulative distribution for each week
+            kelpData=np.squeeze(np.sum(allData[:,week,:,:], axis=0))
+
+            levels=np.arange(np.ma.min(kelpData),np.ma.max(kelpData),0.5)        
+            if (len(levels)>2 and np.ma.mean(kelpData)>0):
+                print("Kelp data {}".format(np.shape(kelpData)))
+                plotDistribution(kelpData,week,baseout,xii,yii,"weekly",polygons)
+
+    elif distType == "integrated":     
+        week = '{}{}'.format(nWeeksWithData[0],nWeeksWithData[-1])       
+        # Plot the distribution for all weeks
+        kelpData=np.squeeze(np.ma.sum(allData[:,:,:,:], axis=0))
+        print("LAST Kelp data {}".format(np.shape(kelpData)))
+        kelpData=np.ma.masked_where(kelpData==0,kelpData)
+        kelpData=np.squeeze(np.ma.sum(kelpData[:,:,:], axis=0))
+        plotDistribution(kelpData,week,baseout,xii,yii,"integrated",polygons)
 
 if __name__ == "__main__":
-    main()
 
+    # Results and storage folders
+    global base,baseout,weeksInYear,sigma 
+    base= r'Data'
+    baseout='distributionFigures'
+    shapefile = 'Shapefile05112018/kelpExPol_11sept2018.shp'
+    if not os.path.exists(baseout): os.makedirs(baseout)   
+
+    weeksInYear = 52
+    #Sigma is used in gaussian filter 
+    # gaussian_filter(weeklyFrequency, sigma) 
+    # this depends on how noisy your data is, play with it!
+    sigma = 0.2 
+ 
+    start_time = time.time()
+    main(shapefile,experiment = 1, distType ="integrated",polygons = None,requiredResolution = 1)    
+    #for experiment in range(1,10): 
+    #    main(shapefile,experiment = experiment, distType ="integrated")
+    ## ---  It took 409.14820981025696 seconds to run the script ---
+    # ---  It took 401.2906005382538 seconds to run the script --- Withough prints 
+    # ---  It took 341.74021339416504 seconds to run the script --- resolution ,'i',
+    #---  It took 468.2105269432068 seconds to run the script --- xarray made it slowlier
+    print("---  It took %s seconds to run the script ---" % (time.time() - start_time))     
