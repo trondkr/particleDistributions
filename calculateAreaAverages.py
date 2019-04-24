@@ -3,22 +3,16 @@
 import os, sys
 import numpy as np
 import glob
-#import string
 import matplotlib
 import geopandas
-#matplotlib.use('Agg')
 from matplotlib.pyplot import cm 
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
-#import matplotlib.path as mpath
-#import matplotlib.patches as mpatches
-#from matplotlib.collections import PatchCollection
-#from pylab import *
+import xarray as xr
 from datetime import datetime
-#from pprint import pprint
 from netCDF4 import Dataset, date2num,num2date
 from scipy.ndimage.filters import gaussian_filter
-import ogr
+#import ogr
 #import osr
 import time
 
@@ -71,50 +65,29 @@ def createBins(requiredResolution):
 
     print('=> created binned array of domain of size (%s,%s) with resolution %s'%(ngridx,ngridy,requiredResolution))
 
-    return xi,yi
+    return xi,yi,ngridx,ngridy
 
 def calculateAreaAverages(xi,yi,cdf,weeksInYear):
 
     print('func: calculateAreaAverages() => Calculating averages within bins')
     print('=> binned domain (%2.1f,%2.1f) to (%2.1f,%2.1f)'%(np.min(xi),np.min(yi),np.max(xi),np.max(yi)))
 
-    timesteps = cdf['time']
-    #timeunits = cdf["time"].units    
-    print('=> found %s timesteps in input file'%(len(timesteps)))
-    newWeek=-9  
-    nWeeksWithData = []
+    for week in range(1,weeksInYear):
+        weekcdf = cdf.where(cdf.time.dt.week == week,drop = True)
 
-    for tindex, t in enumerate(timesteps): 
-        currentDate = t.values
-        #currentDate = num2date(t, units=timeunits, calendar="gregorian")
-        weekNumber = t.dt.week.values #isocalendar()
+        #TODO:Filter by only sedimented particles
+        Xpos = weekcdf.coords['lon'].values.flatten()
+        Ypos = weekcdf.coords['lat'].values.flatten()               
 
-        # should be faster to add weeknumber as a column
-        # then to group by week number and find the sum ?
+        # create average for one week
+        H, xedges, yedges = np.histogram2d(Xpos, Ypos, bins=(xi, yi), normed=False)  
+        if week == 1: 
+            weeklyFrequency=np.zeros((weeksInYear,np.shape(H)[0],np.shape(H)[1]), dtype=np.float32)     
+        weeklyFrequency[week,:,:] = H
 
-        Xpos = cdf.coords['lon'][:,tindex].values
-        Ypos = cdf['lat'][:,tindex].values               
-        H, xedges, yedges = np.histogram2d(Xpos, Ypos, bins=(xi, yi), normed=False)
-        
-        if (tindex==0):
-            weeklyFrequency=np.zeros((weeksInYear,np.shape(H)[0],np.shape(H)[1]), dtype=np.float32)
-            print("Inside t==0")
+    return gaussian_filter(weeklyFrequency, sigma)
 
-        if weekNumber != newWeek:
-            #print("=> Adding data to week: %s (startdate: %s)"%(weekNumber,currentDate))
-            weeklyFrequency[weekNumber,:,:] += H
-            newWeek=weekNumber
-            nWeeksWithData.append(weekNumber)
-    
-    # Create log values and levels for frequencyplot
-    #weeklyFrequency=ma.log(weeklyFrequency)
-    ##weekfmin = weeklyFrequency.min()
-    ##weekfmax = weeklyFrequency.max()
-    ##levels = np.arange(weekfmin,weekfmax,(weekfmax-weekfmin)/10)
-    #print(levels)
-    return gaussian_filter(weeklyFrequency, sigma),nWeeksWithData
-
-def plotDistribution(kelpData,week,baseout,xii,yii,distType,polygons):
+def plotDistribution(kelpData,week,baseout,xii,yii,distType,polygons,experiment):
     print("Plotting the distributions for week: %s"%(week))
     plt.clf()
     plt.figure(figsize=(10,10), frameon=False)
@@ -125,112 +98,127 @@ def plotDistribution(kelpData,week,baseout,xii,yii,distType,polygons):
                     projection='merc')
 
     x, y = mymap(xii, yii)
-    #levels=np.arange(np.min(kelpData),np.max(kelpData),10)
-    levels = np.arange(1,100,1)
-    cblevels = np.arange(10,110,10)  
-    z = np.fliplr(np.rot90(kelpData,3))       
-    CS1 = mymap.contourf(x,y,z,levels,cmap=cm.get_cmap('Spectral_r',len(levels)-1), extend='max', alpha=1.0)
-    CS2 = mymap.contour(x,y,z,cblevels, colors = 'k', linestyle = '--',linewidths = 0.1)
+    
 
-    plt.colorbar(CS1,orientation='vertical',extend='max', shrink=0.5,ticks = cblevels)
+    # = np.arange(10,110,10)  
+    z = np.fliplr(np.rot90(kelpData,3))     
+    #z = 100*z/np.max(z)  # % of max data 
+    #levels = np.arange(0,10,0.1)
+    print (np.min(kelpData))
+    levels=np.linspace(1,np.max(z)/3,20)
+    #cblevels = np.arange(0,10,5)    
+    CS1 = mymap.contourf(x,y,z,vmin = 1,vmax = np.max(z)/2, levels = 100, cmap=cm.get_cmap('Spectral_r'), extend='max') #levels,,len(levels)-1 Spectral_r #, alpha=1.0levels
+    #CS2 = mymap.contour(x,y,z,[1], colors = 'k',linewidths = 0.1)
 
+    plt.colorbar(CS1,orientation='vertical',extend='max', shrink=0.7) #,ticks = cblevels)
+
+    mymap.drawmapboundary(fill_color='#677a7a')
+    mymap.fillcontinents(color='#b8a67d',zorder=2)
     mymap.drawcoastlines()
-    mymap.fillcontinents(color='grey',zorder=2)
-    #mymap.drawcountries()
-    #mymap.drawmapboundary()
-
-    plt.title('Kelp week: {}-{} , polygons: {}-{}'.format(min(week),max(week),min(polygons),max(polygons)))
+    plt.title('Kelp week: {} , polygons: {}-{}, kelp Type {}, experiment {}'.format(week,min(polygons),max(polygons),kelpType,experiment))
     if distType == "integrated":
-        plotfile=baseout+'/Kelp_distribution_all_fullperiod.png'
+        plotfile=baseout+'/Kelp_distribution_all_fullperiod_kelpType{}_experiment_{}.png'.format(kelpType,experiment)
     else:
-        plotfile=baseout+'/Kelp_distribution_all_week_'+str(week)+'polygons_{}-{}'.format(min(polygons),max(polygons))+'.png'
+        plotfile=baseout+'/Kelp_distribution_all_week_'+str(week)+'polygons_{}-{}'.format(min(polygons),max(polygons))+'kelpType_{}.png'.format(kelpType)
     print("=> Creating plot %s"%(plotfile))             
     plt.savefig(plotfile,dpi=300)
  
-def main(shapefile,experiment,distType = "integrated",polygons = None,requiredResolution = 1.):
+def main(shapefile,experiment,distType = "integrated",polygons = None,requiredResolution = 1.,kelpType = None):
     # Which species to calculate for
     # The timespan is part of the filename
+
     ranges = {1:['01052016','01082016'],2:['01032016','15052016'],
-              3:['01112015','01042016'],4:['01052016','01082016']}
+              3:['20112015','01042016'],4:['01052016','01082016'],
+              5:['03082015','01082016']}
     startdate,enddate = ranges[experiment]
 
     # Create the grid you want to calculate frequency on
     # The resolution of the output grid in km between each binned box
-    xi,yi = createBins(requiredResolution)
-
+    xi,yi,ngridx,ngridy = createBins(requiredResolution)
     xii,yii=np.meshgrid(xi[:-1],yi[:-1])
 
     if polygons == None:
         s = geopandas.read_file(shapefile)
         polygons = s.index.values[:-2] + 1
 
-    ###s = ogr.Open(shapefile)
-    #for layer in s:
-    #    polygons = [x + 1 for x in range(layer.GetFeatureCount()-1)]
-    #    print ('layer',layer.GetFeatureCount())
-    #   # polygons=[1,2]
-
-    allData=np.zeros((len(polygons),weeksInYear,len(xi)-1,len(yi)-1))
+    #Created final array for all data of size : (17, 52, 205, 333)
+    # 17 polygons in shapefile , 52 dimension for weeks, xi,yi - bins 
+    allData=np.zeros((len(polygons),weeksInYear,ngridx-1,ngridy-1))
 
     print("=> Created final array for all data of size :",np.shape(allData))
-    '''for polygonIndex, polygon in enumerate(polygons): '''   
-    import xarray as xr
+
     infiles = [base+'/Kelp_polygon_%s_experiment_%s_%s_to_%s.nc' % (polygon, experiment, 
                 startdate, enddate) for polygonIndex, polygon in enumerate(polygons)] 
-
-    for index,infile in enumerate(infiles):
-    #for polygonIndex, polygon in enumerate(polygons):
-    #    infile = base+'/Kelp_polygon_%s_experiment_%s_%s_to_%s.nc' % (polygon, experiment, startdate, enddate)
-    #    
-        if os.path.exists(infile):
-            print("=> Opening input file: %s"%(infile))
-            cdf = xr.open_dataset(infile) 
-            #cdf = Dataset(infile)
-            allData[index,:,:,:],nWeeksWithData = calculateAreaAverages(xi,yi,cdf,weeksInYear)
+    
+    for polygonIndex,path in enumerate(infiles):   
+        if os.path.exists(path):
+            #print("=> Opening input file: %s"%(path))
+            cdf = xr.open_dataset(path)   
+            if kelpType != None: # if kelpType is specified, we filter the dataframe by type 
+                cdf = cdf.where(cdf.plantpart == kelpType,drop = True) 
+            allData[polygonIndex,:,:,:] = calculateAreaAverages(xi,yi,cdf,weeksInYear)
             cdf.close()
         else:
-            print("==>> Input file %s could not be opened"%(infile))
+            print("==>> Input file %s could not be opened"%(path))
 
     if distType == "weekly": 
         for week in range(1,weeksInYear,1):
             # Calculate the cumulative distribution for each week
             kelpData=np.squeeze(np.sum(allData[:,week,:,:], axis=0))
-
             levels=np.arange(np.ma.min(kelpData),np.ma.max(kelpData),0.5)        
             if (len(levels)>2 and np.ma.mean(kelpData)>0):
                 print("Kelp data {}".format(np.shape(kelpData)))
-                plotDistribution(kelpData,week,baseout,xii,yii,"weekly",polygons)
+                plotDistribution(kelpData,week,baseout,xii,yii,"weekly",polygons,experiment)
 
     elif distType == "integrated":     
-        week = '{}{}'.format(nWeeksWithData[0],nWeeksWithData[-1])       
+        week = 'Sum over all time range'  
         # Plot the distribution for all weeks
-        kelpData=np.squeeze(np.ma.sum(allData[:,:,:,:], axis=0))
+        # sum data along all polygons and all weeks. 
+        kelpData=np.ma.sum(allData[:,:,:,:], axis=(0,1))     
         print("LAST Kelp data {}".format(np.shape(kelpData)))
+        # if value is zero for all polygons,weeks the position is masked
         kelpData=np.ma.masked_where(kelpData==0,kelpData)
-        kelpData=np.squeeze(np.ma.sum(kelpData[:,:,:], axis=0))
-        plotDistribution(kelpData,week,baseout,xii,yii,"integrated",polygons)
+        plotDistribution(kelpData,week,baseout,xii,yii,"integrated",polygons,experiment)
 
 if __name__ == "__main__":
+    start_time = time.time()
 
     # Results and storage folders
     global base,baseout,weeksInYear,sigma 
+    global kelpType
+
     base= r'Data'
     baseout='distributionFigures'
     shapefile = 'Shapefile05112018/kelpExPol_11sept2018.shp'
     if not os.path.exists(baseout): os.makedirs(baseout)   
-
     weeksInYear = 52
-    #Sigma is used in gaussian filter 
+
+    ##Parameters: 
+    sigma = 0.2     
+    # Sigma is used in gaussian filter 
     # gaussian_filter(weeklyFrequency, sigma) 
     # this depends on how noisy your data is, play with it!
-    sigma = 0.2 
- 
-    start_time = time.time()
-    main(shapefile,experiment = 1, distType ="integrated",polygons = None,requiredResolution = 1)    
-    #for experiment in range(1,10): 
-    #    main(shapefile,experiment = experiment, distType ="integrated")
-    ## ---  It took 409.14820981025696 seconds to run the script ---
-    # ---  It took 401.2906005382538 seconds to run the script --- Withough prints 
-    # ---  It took 341.74021339416504 seconds to run the script --- resolution ,'i',
-    #---  It took 468.2105269432068 seconds to run the script --- xarray made it slowlier
-    print("---  It took %s seconds to run the script ---" % (time.time() - start_time))     
+
+    kelpType = 1
+    alltypes =(0,1,2,4)  
+    experiments = (1,2,3,4,5)
+    # kelpType is the parameter for chosing, the type of kelp (differs by density?)
+    # available types are 0,1,2,4; -32767 is used for masking in the nc file ,
+    #  None can be used for all types       
+
+    polygons = None #None (1,2,3) #  means all polygons, otherwise create a list of needed polygons 
+
+    distType ="integrated"
+    # integrated to plot all positions of particles during recorded time
+    # 'weekly' to plot separately positions during all weeks in the recorded time range 
+
+    #requiredResolution = 1   Resolution of the data, used in creating bins 
+    #main(shapefile,experiment = 3, distType = distType,polygons = polygons,
+    #    requiredResolution = 1,kelpType = kelpType)
+
+    for kelpType in alltypes:
+        kelpType = kelpType
+        [main(shapefile,experiment = e, distType = distType,polygons = polygons,
+        requiredResolution = 1,kelpType = kelpType) for e in experiments]
+        
+    print("---  It took %s seconds to run the script ---" % (time.time() - start_time))   
