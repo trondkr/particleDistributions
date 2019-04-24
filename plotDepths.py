@@ -9,16 +9,8 @@ from pandas.plotting import register_matplotlib_converters
 register_matplotlib_converters()
 import seaborn as sns
 sns.set() 
+import utils 
 
-specie='Kelp'
-startdate='01052016'
-enddate='01082016'
-polygons=[1] #,2,3,4,5]
-#densities=[0,1,2,3,4] 
-experiment=1
-
-df = xr.open_dataset(r'Kelp_polygon_1_experiment_1_01052016_to_01082016.nc' )
-df['z'] = df['z'] * -1.
 
 def find_depth(data):
     # ! find first non nan at first and cut the rest 
@@ -27,7 +19,6 @@ def find_depth(data):
     data = data.where(data.sea_floor_depth_below_sea_level != 'nan',drop = True)
     # find differences between floor depth and particle depth for each trajectory
     data['dif_depth'] =  data.sea_floor_depth_below_sea_level - data.z 
-
     return data
 
 def get_groups(new_df,p_part):
@@ -55,7 +46,7 @@ def plt_part(p_part,col,axis):
     #print ('not_deposited or wrong array',not_deposited)    
     axis.set_ylim(350,0)        
  
-def plt_part_normilized(p_part,col,axis,axis2):
+def plt_part_normilized(df,p_part,col,axis,axis2):
     d = get_groups(new_df = df, p_part = p_part)
     not_deposited = 0
     sed_depths = []
@@ -69,18 +60,17 @@ def plt_part_normilized(p_part,col,axis,axis2):
             sed_depths.append(d.z[n][sed])
             if start != sed:        
                 axis.plot(np.arange(0,sed+1-start),d.z[n][start:sed+1],'-', color = col,markersize = 1,linewidth = 0.5,alpha = 1,zorder = 9)       
-                axis.plot(sed-start,d.z[n][sed],'ko', markersize = 2,zorder = 10)                   
+                axis.plot(sed-start,d.z[n][sed],'ko', markersize = 1,zorder = 10)                   
         except :    
             not_deposited += 1 
 
-    axis2.hist(sed_depths,50,density = True)  
     axis.set_title('Distibution of particles (type {}), normalized by time'.format(p_part))      
-    axis2.set_title('Sedimentation depths')
     axis.set_xlabel('Days since the release') 
     axis.set_ylabel('Depth, m')
     axis.set_ylim(350,0)    
     axis.set_xlim(0,650) 
-    axis2.set_xlim(0,200)  
+
+    return sed_depths
 
 def call_make_plot(norm = False):
     fig = plt.figure(figsize=(11.69 , 8.27), dpi=100,
@@ -112,6 +102,51 @@ def call_make_plot(norm = False):
     plt.savefig('sed_depth.png',format = 'png')
     #plt.show()
 
+def call_make_plot_mf(paths,experiment):
+
+    fig = plt.figure(figsize=(11.69 , 8.27), dpi=100,
+                                            facecolor='white')
+    gs = gridspec.GridSpec(3,2, width_ratios=[3, 1])
+    gs.update(left=0.08, right=0.98 ,top = 0.96,bottom = 0.08,
+            wspace=0.13 ,hspace=0.37) 
+
+    ax1 = fig.add_subplot(gs[0])
+    ax1_1 = fig.add_subplot(gs[1]) 
+
+    ax2 = fig.add_subplot(gs[2])
+    ax2_1= fig.add_subplot(gs[3])
+
+    ax3 = fig.add_subplot(gs[4])
+    ax3_1 = fig.add_subplot(gs[5])
+
+    sed_depths1,sed_depths2,sed_depths4 = [],[],[]
+    for path in paths:
+        df = xr.open_dataset(path)
+        df['z'] = df['z'] * -1.
+
+        s1 = plt_part_normilized(df,1,'#d65460',ax1,ax1_1) 
+        s2 = plt_part_normilized(df,2,'g',ax2,ax2_1)
+        s4 = plt_part_normilized(df,4,'#006080',ax3,ax3_1)        
+        sed_depths1.extend(s1)
+        sed_depths2.extend(s2)
+        sed_depths4.extend(s4)
+        df.close()
+    ax1_1.hist(sed_depths1,bins = np.arange(1,200,10),density = True,color = 'k')   
+    ax2_1.hist(sed_depths2,50,density = True,color = 'k')   
+    ax3_1.hist(sed_depths4,50,density = True,color = 'k')   
+
+    for axis2 in (ax1_1,ax2_1,ax3_1):  
+        axis2.set_title('Sedimentation depths')    
+        axis2.set_xlim(0,200)  
+
+    #plt.savefig('sed_depth.png',format = 'png')
+    plt.show()
+
+
 if __name__ == '__main__':
-   call_make_plot(norm = True)
+
+    polygons=(1,2) #,2,3,4,5]
+    experiment = 1
+    paths = utils.get_paths(polygons,experiment)
+    call_make_plot_mf(paths,experiment)
    #call_make_plot(norm = False)

@@ -4,7 +4,6 @@ import os, sys
 import numpy as np
 import glob
 import matplotlib
-import geopandas
 from matplotlib.pyplot import cm 
 import matplotlib.pyplot as plt
 from mpl_toolkits.basemap import Basemap
@@ -15,6 +14,7 @@ from scipy.ndimage.filters import gaussian_filter
 #import ogr
 #import osr
 import time
+import utils
 
 __author__   = 'Trond Kristiansen'
 __email__    = 'me (at) trondkristiansen.com'
@@ -38,7 +38,6 @@ def createBins(requiredResolution):
     print('func: createBins() => Creating bins for averaging')
     xmin=15.0; xmax=21.0
     ymin=69.0; ymax=72.0
-
     deg2rad=np.pi/180.
     R = 6371  # radius of the earth in km
     # Distance from minimum to maximim longitude
@@ -107,7 +106,8 @@ def plotDistribution(kelpData,week,baseout,xii,yii,distType,polygons,experiment)
     print (np.min(kelpData))
     levels=np.linspace(1,np.max(z)/3,20)
     #cblevels = np.arange(0,10,5)    
-    CS1 = mymap.contourf(x,y,z,vmin = 1,vmax = np.max(z)/2, levels = 100, cmap=cm.get_cmap('Spectral_r'), extend='max') #levels,,len(levels)-1 Spectral_r #, alpha=1.0levels
+    CS1 = mymap.contourf(x,y,z,vmin = 1,vmax = np.max(z)/2, levels = 100, cmap=cm.get_cmap('Spectral_r'), extend='max') 
+    #levels,,len(levels)-1 Spectral_r #, alpha=1.0levels
     #CS2 = mymap.contour(x,y,z,[1], colors = 'k',linewidths = 0.1)
 
     plt.colorbar(CS1,orientation='vertical',extend='max', shrink=0.7) #,ticks = cblevels)
@@ -115,7 +115,8 @@ def plotDistribution(kelpData,week,baseout,xii,yii,distType,polygons,experiment)
     mymap.drawmapboundary(fill_color='#677a7a')
     mymap.fillcontinents(color='#b8a67d',zorder=2)
     mymap.drawcoastlines()
-    plt.title('Kelp week: {} , polygons: {}-{}, kelp Type {}, experiment {}'.format(week,min(polygons),max(polygons),kelpType,experiment))
+    plt.title('Kelp week: {} , polygons: {}-{}, kelp Type {}, experiment {}'.format(
+                            week,min(polygons),max(polygons),kelpType,experiment))
     if distType == "integrated":
         plotfile=baseout+'/Kelp_distribution_all_fullperiod_kelpType{}_experiment_{}.png'.format(kelpType,experiment)
     else:
@@ -123,14 +124,10 @@ def plotDistribution(kelpData,week,baseout,xii,yii,distType,polygons,experiment)
     print("=> Creating plot %s"%(plotfile))             
     plt.savefig(plotfile,dpi=300)
  
-def main(shapefile,experiment,distType = "integrated",polygons = None,requiredResolution = 1.,kelpType = None):
+def main(shapefile,experiment,distType,polygons = None,requiredResolution = 1.,kelpType = None):
     # Which species to calculate for
     # The timespan is part of the filename
-
-    ranges = {1:['01052016','01082016'],2:['01032016','15052016'],
-              3:['20112015','01042016'],4:['01052016','01082016'],
-              5:['03082015','01082016']}
-    startdate,enddate = ranges[experiment]
+    startdate,enddate = utils.ranges[experiment]
 
     # Create the grid you want to calculate frequency on
     # The resolution of the output grid in km between each binned box
@@ -138,18 +135,14 @@ def main(shapefile,experiment,distType = "integrated",polygons = None,requiredRe
     xii,yii=np.meshgrid(xi[:-1],yi[:-1])
 
     if polygons == None:
-        s = geopandas.read_file(shapefile)
-        polygons = s.index.values[:-2] + 1
+        polygons = utils.get_polygons()
 
     #Created final array for all data of size : (17, 52, 205, 333)
     # 17 polygons in shapefile , 52 dimension for weeks, xi,yi - bins 
     allData=np.zeros((len(polygons),weeksInYear,ngridx-1,ngridy-1))
-
     print("=> Created final array for all data of size :",np.shape(allData))
-
-    infiles = [base+'/Kelp_polygon_%s_experiment_%s_%s_to_%s.nc' % (polygon, experiment, 
-                startdate, enddate) for polygonIndex, polygon in enumerate(polygons)] 
-    
+    infiles = utils.get_paths(polygons,experiment)
+   
     for polygonIndex,path in enumerate(infiles):   
         if os.path.exists(path):
             #print("=> Opening input file: %s"%(path))
@@ -213,12 +206,12 @@ if __name__ == "__main__":
     # 'weekly' to plot separately positions during all weeks in the recorded time range 
 
     #requiredResolution = 1   Resolution of the data, used in creating bins 
-    #main(shapefile,experiment = 3, distType = distType,polygons = polygons,
-    #    requiredResolution = 1,kelpType = kelpType)
+    main(shapefile,experiment = 3, distType = distType,polygons = (1,2),
+        requiredResolution = 1,kelpType = 1)
 
-    for kelpType in alltypes:
+    '''for kelpType in alltypes:
         kelpType = kelpType
         [main(shapefile,experiment = e, distType = distType,polygons = polygons,
-        requiredResolution = 1,kelpType = kelpType) for e in experiments]
-        
+        requiredResolution = 1,kelpType = kelpType) for e in experiments]'''
+
     print("---  It took %s seconds to run the script ---" % (time.time() - start_time))   
