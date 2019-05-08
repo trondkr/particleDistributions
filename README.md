@@ -13,4 +13,6 @@ The following calculations needs to be added:
 
 - [ ] The sedimentation function should take distance from bottom and maximum movement over X hours as input to determine when sedimentation occurss to make it more generic.
 
+- [ ] Calculate the probability that kelp from a given polygon is sedimented at depth deeper than X meters.
+
 
