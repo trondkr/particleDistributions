@@ -16,3 +16,30 @@ The following calculations needs to be added:
 - [ ] Calculate the probability that kelp from a given polygon is sedimented at depth deeper than X meters.
 
 
+### How to run the script on Windows 
+calculateAreaAverages.py uses several non standard python packages and it is a bit treaky to download them properly on windows. 
+
+* ogr (part of GDAL - Geospatial Data Abstraction Library https://github.com/OSGeo/gdal)
+
+  Create virtual conda environment and download gdal
+  
+  conda create -n GDAL python=3.6 gdal
+  
+  Fra <https://github.com/conda-forge/gdal-feedstock/issues/175> 
+
+* Other packages you should download with conda-forge:
+
+    conda install -c conda-forge 
+    
+    conda install basemap 
+    
+    conda install basemap-data-hires
+    
+    conda install matplotlib
+    
+    conda install scipy 
+    
+* Last, download netcd4 package using pip,not conda. Otherwise it won't wok.
+
+  Pip install netcdf4  (not conda,important) 
+ 
