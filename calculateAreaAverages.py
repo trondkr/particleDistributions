@@ -23,6 +23,16 @@ __modified__ = datetime(2016, 8, 10)
 __version__  = "1.0"
 __status__   = "Production"
 
+global base,baseout,weeksInYear,sigma 
+global kelpType
+weeksInYear = 52
+
+##Parameters: 
+sigma = 0.2     
+# Sigma is used in gaussian filter 
+# gaussian_filter(weeklyFrequency, sigma) 
+# this depends on how noisy your data is, play with it!
+
 # --------
 # calculateaverages.py
 #
@@ -73,8 +83,12 @@ def calculateAreaAverages(xi,yi,cdf,weeksInYear):
 
     for week in range(1,weeksInYear):
         weekcdf = cdf.where(cdf.time.dt.week == week,drop = True)
-
+        
+        #utils.filter_sedimented()
         #TODO:Filter by only sedimented particles
+        #print (weekcdf)
+        print ('week',week)
+        break
         Xpos = weekcdf.coords['lon'].values.flatten()
         Ypos = weekcdf.coords['lat'].values.flatten()               
 
@@ -98,7 +112,6 @@ def plotDistribution(kelpData,week,baseout,xii,yii,distType,polygons,experiment)
 
     x, y = mymap(xii, yii)
     
-
     # = np.arange(10,110,10)  
     z = np.fliplr(np.rot90(kelpData,3))     
     #z = 100*z/np.max(z)  # % of max data 
@@ -177,36 +190,30 @@ if __name__ == "__main__":
     start_time = time.time()
 
     # Results and storage folders
-    global base,baseout,weeksInYear,sigma 
-    global kelpType
+
 
     base= r'Data'
     baseout='distributionFigures'
     shapefile = 'Shapefile05112018/kelpExPol_11sept2018.shp'
     if not os.path.exists(baseout): os.makedirs(baseout)   
-    weeksInYear = 52
 
-    ##Parameters: 
-    sigma = 0.2     
-    # Sigma is used in gaussian filter 
-    # gaussian_filter(weeklyFrequency, sigma) 
-    # this depends on how noisy your data is, play with it!
 
     kelpType = 1
-    alltypes =(0,1,2,4)  
+    alltypes = (0,1,2,4)  
     experiments = (1,2,3,4,5)
     # kelpType is the parameter for chosing, the type of kelp (differs by density?)
     # available types are 0,1,2,4; -32767 is used for masking in the nc file ,
     #  None can be used for all types       
 
-    polygons = None #None (1,2,3) #  means all polygons, otherwise create a list of needed polygons 
+    polygons = None 
+    #polygons = (1,2,3) # #None means all polygons, otherwise create a list of needed polygons 
 
     distType ="integrated"
     # integrated to plot all positions of particles during recorded time
     # 'weekly' to plot separately positions during all weeks in the recorded time range 
 
     #requiredResolution = 1   Resolution of the data, used in creating bins 
-    main(shapefile,experiment = 3, distType = distType,polygons = (1,2),
+    main(shapefile,experiment = 3, distType = distType,polygons = polygons,
         requiredResolution = 1,kelpType = 1)
 
     '''for kelpType in alltypes:
