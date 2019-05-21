@@ -49,7 +49,9 @@ def create_map():
     mymap.drawcoastlines()
     return mymap
 
-def get_pos(paths,kelpType):      
+
+def get_pos(paths,kelpType): 
+    lats,lons = [],[]
     for path in paths:
         df = xr.open_dataset(path)
         # Function can plot either all kelp types or one 
@@ -58,8 +60,8 @@ def get_pos(paths,kelpType):
         df = df.where(df.status > -1, drop = True)   
         d = df.groupby(df.trajectory).apply(find_depth)   
         parts = range(0,len(d.trajectory)-1)
-        lats = [utils.get_lat(d,n).values for n in parts if utils.is_sedimented(d,n)]
-        lons = [utils.get_lon(d,n).values for n in parts if utils.is_sedimented(d,n)]        
+        lats.extend([utils.get_lat(d,n).values for n in parts if utils.is_sedimented(d,n)])
+        lons.extend([utils.get_lon(d,n).values for n in parts  if utils.is_sedimented(d,n)])   
     return lats,lons
 
 def createBins(res):
@@ -75,9 +77,6 @@ def createBins(res):
 
     def rad(var):
         return var*deg2rad
-
-    #def get_dx():
-
 
     xmaxrad = xmax*deg2rad
     xminrad = xmin*deg2rad
@@ -107,7 +106,6 @@ def createBins(res):
 #    db = 1.e-6 # bin padding    
 #    return np.linspace(min(l)-db, max(l)+db, nbins)
 
-
 def get_density(lats, lons,nlevels,cmap):
     # compute appropriate bins to chop up the data: 
     #lon_bins = get_bins(lons,nbins)
@@ -116,6 +114,7 @@ def get_density(lats, lons,nlevels,cmap):
     lon_bins,lat_bins = createBins(res = 1)   
 
     density, _, _ = np.histogram2d(lats, lons, [lat_bins, lon_bins])
+    # mask 0 density if needed
     density = ma.masked_where(density == 0, density)
 
     levels = MaxNLocator(nbins=nlevels).tick_values(0,100)
@@ -146,7 +145,7 @@ def make_map(paths,kelpType,type,experiment,polygons):
         x,y = mymap(lons,lats)
         mymap.scatter(x,y,alpha = 0.5,c = 'k',s = 10)
         figname = r'{}_for_kelp_type_{}_polygons_{}_experiment_{}.png'.format(type,kelpType,polygons,experiment)         
-
+    #plt.show()
     plt.savefig(figname,format = 'png',dpi = 300)
 
 
