@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
-from matplotlib.pyplot import cm 
+from matplotlib.pyplot import cm
 from mpl_toolkits.basemap import Basemap
 import sys
 import ogr
@@ -9,7 +9,7 @@ import osr
 import matplotlib.path as mpath
 import matplotlib.patches as mpatches
 from matplotlib.collections import PatchCollection
-#import geopandas
+
 
 class KelpPolygons(object):
 
@@ -93,7 +93,7 @@ class AnimatedScatter(object):
         # Setup the figure and axes...
         self.fig, self.ax = plt.subplots(figsize=(10,10))
         self.mymap = Basemap(llcrnrlon=16.0, llcrnrlat=69.4,
-                    urcrnrlon=19.0, urcrnrlat=70.2,resolution='h', 
+                    urcrnrlon=19.0, urcrnrlat=70.2,resolution='h',
                     projection='merc')
         self.mymap.shadedrelief()
         self.mymap.fillcontinents(color='#b8a67d',zorder=2)
@@ -145,5 +145,5 @@ class AnimatedScatter(object):
 
 
 if __name__ == '__main__':
-    a = AnimatedScatter()
+    a = AnimatedScatter("test.mp4")
    # plt.show()

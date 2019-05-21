@@ -1,17 +1,9 @@
 # coding=utf-8
 
-import os, sys
 import numpy as np
-import numpy.ma as ma
-import glob
-import matplotlib
-from matplotlib.pyplot import cm 
 import matplotlib.pyplot as plt
-from mpl_toolkits.basemap import Basemap
 import pandas as pd
-import xarray as xr
 from datetime import datetime
-from netCDF4 import Dataset, date2num,num2date
 from scipy.ndimage.filters import gaussian_filter
 from matplotlib.colors import BoundaryNorm
 from matplotlib.ticker import MaxNLocator
@@ -41,34 +33,31 @@ def get_groups(new_df,p_part):
     # apply method to each trajectory (particle release event)
     return d.groupby(d.trajectory).apply(find_depth)
 
-def get_pos_function_of_time(paths,kelpType):  
+def get_pos_function_of_time(paths,kelpType):
  
     df = xr.open_mfdataset(paths,concat_dim='trajectory')
     # Function can plot either all kelp types or one 
     if kelpType != 'All':
         df = df.where(df.plantpart == kelpType,drop = True)     
-    df = df.where(df.status > -1, drop = True)   
-    d = df.groupby(df.trajectory).apply(find_depth) 
-
-    parts = range(0,len(d.trajectory)-1)
-   
+    df = df.where(df.status > -1, drop = True)
+    d = df.groupby(df.trajectory).apply(find_depth)
+    
     return d
 
 def make_map(paths,kelpType,type,experiment,polygons):
     
     df = get_pos_function_of_time(paths,kelpType)
-    time=df['time'][:].values
     lats=df['lat'][:].values
     lons=df['lon'][:].values
     z=df['z'][:].values
 
     if type == 'animate_particles':
-        figname = r'{}_for_kelp_type_{}_polygons_{}_experiment_{}.mp4'.format(type,kelpType,polygons,experiment)         
+        figname = r'{}_for_kelp_type_{}_polygons_{}_experiment_{}.mp4'.format(type,kelpType,polygons,experiment)
         anim = animateScatter.AnimatedScatter(lons,lats,z,figname)
         anim.saveAnim()
 
     if type=='plot_particletracks':
-        figname = r'{}_for_kelp_type_{}_polygons_{}_experiment_{}.png'.format(type,kelpType,polygons,experiment)         
+        figname = r'{}_for_kelp_type_{}_polygons_{}_experiment_{}.png'.format(type,kelpType,polygons,experiment)
         trk = tracks.Tracks(lons,lats,z,figname)
         trk.plot_tracks()
 
@@ -86,7 +75,7 @@ def call_make_map(animation,kelpType,plot_type,experiments,polygons):
 if __name__ == "__main__":
     start_time = time.time()
 
-    #Examples: 
+    #Examples:
     # 1 ) 
     # takes  20 seconds   
     #call_make_map(kelpType = 1,plot_type = 'heatmap',experiments = [1], polygons = [1]) # 'All')
