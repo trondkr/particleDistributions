@@ -12,7 +12,7 @@ import time
 import utils
 import animateScatter
 import tracks
-
+import xarray as xr
 #
 #
 # MAIN program for creating particle track plots and animations of kelp experiments
@@ -30,7 +30,7 @@ def find_depth(data):
 def get_groups(new_df,p_part):
     d = new_df.where(new_df.plantpart == p_part,drop = True)
     # apply method to each trajectory (particle release event)
-    return d.groupby(d.trajectory).apply(find_depth)
+    return d #d.groupby(d.trajectory).apply(find_depth)
 
 def get_pos_function_of_time(paths,kelpType):
  
