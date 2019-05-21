@@ -8,7 +8,7 @@ ranges = {1:['01052016','01082016'],2:['01032016','15052016'],
           5:['03082015','01082016']}
 
 def get_polygons():
-    shapefile = r'Shapefile05112018\kelpExPol_11sept2018.shp'
+    shapefile = r'Shapefile/Shapefile05112018/kelpExPol_11sept2018.shp'
     s = geopandas.read_file(shapefile)
     return(s.index.values[:-2] + 1)
 
@@ -17,6 +17,7 @@ def get_paths(polygons = None,experiment = 1):
         polygons = get_polygons()
     elif polygons is 'All':
         polygons = get_polygons()        
+    
     startdate,enddate = ranges[experiment]
     base= r'Data' 
     return [base+'/Kelp_polygon_%s_experiment_%s_%s_to_%s.nc' % (polygon, experiment, 
@@ -24,7 +25,7 @@ def get_paths(polygons = None,experiment = 1):
 
 def is_sedimented(d,n):
     # check if particle was sedimented
-    sed = np.argwhere(d.dif_depth[n].values < 0.2)
+    sed = np.argwhere(d.dif_depth[n].values < 0.1)
     if sed.size == 0:
         return False
     else: 
