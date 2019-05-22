@@ -31,10 +31,10 @@ def find_depth(data):
     data['dif_depth'] =  data.sea_floor_depth_below_sea_level - data.z 
     return data
 
-def get_groups(new_df,p_part):
+'''def get_groups(new_df,p_part):
     d = new_df.where(new_df.plantpart == p_part,drop = True)
     # apply method to each trajectory (particle release event)
-    return d.groupby(d.trajectory).apply(find_depth)
+    return d.groupby(d.trajectory).apply(find_depth)'''
 
 def create_map():
     fig = plt.figure(figsize=(10,10), frameon=False)
@@ -49,7 +49,6 @@ def create_map():
     mymap.drawcoastlines()
     return mymap
 
-
 def get_pos(paths,kelpType): 
     lats,lons = [],[]
     for path in paths:
@@ -58,7 +57,8 @@ def get_pos(paths,kelpType):
         if kelpType != 'All':
             df = df.where(df.plantpart == kelpType,drop = True)     
         df = df.where(df.status > -1, drop = True)   
-        d = df.groupby(df.trajectory).apply(find_depth)   
+        #d = df.groupby(df.trajectory).apply(find_depth)   
+        d = utils.get_groups(new_df = df, p_part = kelpType)
         parts = range(0,len(d.trajectory)-1)
         lats.extend([utils.get_lat(d,n).values for n in parts if utils.is_sedimented(d,n)])
         lons.extend([utils.get_lon(d,n).values for n in parts  if utils.is_sedimented(d,n)])   
