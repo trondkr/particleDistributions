@@ -2,7 +2,9 @@ import geopandas
 import xarray as xr
 import numpy as np
 
- 
+#criteria to find sedimentation event
+sed_crit = 0.1
+
 ranges = {1:['01052016','01082016'],2:['01032016','15052016'],
           3:['20112015','01042016'],4:['01052016','01082016'],
           5:['03082015','01082016']}
@@ -25,21 +27,33 @@ def get_paths(polygons = None,experiment = 1):
 
 def is_sedimented(d,n):
     # check if particle was sedimented
-    sed = np.argwhere(d.dif_depth[n].values < 0.1)
-    if sed.size == 0:
+    #d = d.fillna(900u)
+    arr = np.ma.masked_invalid(d.dif_depth[n].values)
+    #print ('count non-masked elements after nan masking',arr.count())
+    s = np.ma.masked_greater(arr,sed_crit) 
+    #print (s.count())
+    #print ('Count n-masked after nan masking')
+    
+    #print (s, len(s),s.count(),'*********')
+    #sed = np.argwhere(arr < sed_crit)
+    # print ('n of sedimentation events count n-masked after condition',s.count())
+    
+    if s.count() == 0:
         return False
     else: 
         return True  
 
 def get_start(d,n):
-    # find index of the release event 
-    return int(min(np.argwhere(np.invert(np.isnan(d.dif_depth[n].values)))))  
+    # find index of the release event
+    arr = np.ma.masked_invalid(d.dif_depth[n].values)
+    return np.ma.flatnotmasked_edges(arr)[0]  
 
 def get_sed(d,n):  
     # find index in array of sedimentations time 
     # first time when difference between seafloor 
     # and particle depth is < 0.2 m 
-    return int(min(np.argwhere(d.dif_depth[n].values < 0.2)))
+    #d = d.fillna(999)
+    return int(min(np.argwhere(d.dif_depth[n].values < sed_crit)))
 
 def get_lat(d,n):
     # find lat of the particle at the sedimentation time 
@@ -51,9 +65,6 @@ def get_lon(d,n):
 
 def get_sed_depth(d,n):
     return d.z[n][get_sed(d,n)]
-
-
-
 
 def get_latlon(d,n):
     # fin lat of the particle at the sedimentation time 
