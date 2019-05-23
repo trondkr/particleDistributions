@@ -1,3 +1,4 @@
+import netCDF4
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
 import numpy as np
@@ -35,13 +36,16 @@ def plt_part(df,p_part,col,axis,norm):
     for n in parts: # loop over trajectories 
         if utils.is_sedimented(d,n):
             start = utils.get_start(d,n)  
-            sed = utils.get_sed(d,n) 
+            sed = utils.get_sed(d,n)
+            startdate = np.datetime64('2000-01-01T00:00:00')
             if start != sed:  
                 if norm == True:
-                    x = np.arange(0,sed+1-start)
-                    z =  d.z[n][start:sed+1]    
+                    dif = d.time[start]-startdate
+                    x = d.time[start:sed+1] - dif
+                    #x = np.arange(0,sed+1-start)
+                    z =  d.z[n][start:sed+1]
                     axis.plot(x,z,'-', color = col,markersize = 1,linewidth = 0.5,alpha = 1,zorder = 9)       
-                    axis.plot(sed-start,d.z[n][sed],'ko', markersize = 1,zorder = 10)      
+                    #axis.plot(sed-start,d.z[n][sed],'ko', markersize = 1,zorder = 10)      
                 elif norm == False:      
                     x = d.time[start:sed+1]
                     z = d.z[n][start:sed+1]    
@@ -52,11 +56,11 @@ def plt_part(df,p_part,col,axis,norm):
             not_deposited += 1   
     if norm == True:
         axis.set_title('Distibution of particles (type {}), normalized by time'.format(p_part))    
+        frmt = '%M-%d'
     elif norm == False: 
-        axis.set_title('Distibution of particles (type {})'.format(p_part))   
-        axis.set_xlabel('Days since the release') 
+        axis.set_title('Distibution of particles (type {})'.format(p_part))
         frmt = '%b/%d'             
-        axis.xaxis.set_major_formatter(mdates.DateFormatter(frmt))   
+    axis.xaxis.set_major_formatter(mdates.DateFormatter(frmt))   
     axis.set_ylabel('Depth, m')
     axis.set_ylim(350,0)    
     #axis.set_xlim(0,650)       
@@ -81,7 +85,9 @@ def call_make_plot_mf(paths,experiment,normalize):
 
     sed_depths1,sed_depths2,sed_depths4 = [],[],[]
     for path in paths:
-        df = xr.open_dataset(path)
+        with xr.open_dataset(path) as ds:
+            df = ds.load()
+        #df = xr.open_dataset(path)
         df['z'] = df['z'] * -1.
 
         s1 = plt_part(df,1,'#d65460',ax1,normalize) 
@@ -120,8 +126,8 @@ if __name__ == '__main__':
     #paths = np.concatenate(p)
 
     #call_make_plot_mf(paths,'all',normalize = True)    
-    call_make_plot_mf(paths,experiment = 1,normalize = False) 
-    #call_make_plot_mf(paths,experiment = 1,normalize = True) 
+    #call_make_plot_mf(paths,experiment = 1,normalize = False) 
+    call_make_plot_mf(paths,experiment = 1,normalize = True) 
 
         #for exp in experiments:
     #    p.append(utils.get_paths(polygons,exp))
