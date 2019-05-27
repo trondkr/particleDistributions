@@ -1,2 +1,5 @@
 *.nc
 *.png
+*.pyc
+Data
+Shapefile
