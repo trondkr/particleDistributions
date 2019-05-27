@@ -14,15 +14,6 @@ import utils
 import time
 sed_crit = 0.1
 
-'''def find_depth(data):
-    # ! find first non nan at first and cut the rest 
-    data = data.where(data.z != 'nan')
-    data = data.where(data.z != np.nan)
-    data = data.where(data.sea_floor_depth_below_sea_level != 'nan',drop = True)
-    # find differences between floor depth and particle depth for each trajectory
-    data['dif_depth'] =  data.sea_floor_depth_below_sea_level - data.z 
-    return data['dif_depth']'''
-
 def plt_part(df,p_part,col,axis,norm):
     d = df.where(df.plantpart == p_part,drop = True)
     d['dif_depth'] =  d.sea_floor_depth_below_sea_level - d.z     
@@ -32,15 +23,13 @@ def plt_part(df,p_part,col,axis,norm):
 
     sed_depths = [utils.get_sed_depth2(d) for n,d in grp]
     sed_depths = list(filter(None.__ne__,sed_depths))    
-    #starts = [utils.get_start_sed(d.isel(trajectory = n))[0] for n,val in enumerate(parts)]
-    #seds =   [utils.get_start_sed(d.isel(trajectory = n))[1] for n,val in enumerate(parts)]
-
+    starts = [utils.get_start2(d) for n,d in grp]
+    seds =   [utils.get_sed2(d) for n,d in grp]
 
     startdate = np.datetime64('2000-01-01T00:00:00')
 
     for n,ds in grp:  # loop over trajectories 
-        #ds = d.isel(trajectory = n)
-        start,sed = utils.get_start_sed(ds) #starts[n],seds[n]
+        start,sed = utils.get_start_sed(ds)
         if start != sed:   
             if norm == True:
                 #lifetime = ds.time[stop].values - ds.time[start].values

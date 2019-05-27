@@ -50,6 +50,18 @@ def get_start(d,n):
     arr = np.ma.masked_invalid(d.dif_depth[n].values)
     return first_n_nan(arr)
 
+def get_start2(d):
+    # find index of the release event, 
+    # first non masked element
+    arr = np.ma.masked_invalid(d.dif_depth.values)
+    return first_n_nan(arr)
+
+def get_sed2(d,start = None):  
+    if start == None:
+        start = get_start2(d)
+    arr = np.ma.masked_greater(d.dif_depth.values[start:],sed_crit)    
+    return first_n_nan(arr)
+
 def get_sed(d,n,start = None):  
     if start == None:
         start = get_start(d,n)
@@ -58,9 +70,6 @@ def get_sed(d,n,start = None):
     # mask non-sedimented particles
     arr = np.ma.masked_greater(d.dif_depth[n].values[start:],sed_crit)    
     return first_n_nan(arr)
-
-
-
 
 def get_start_sed(d):
     # find index of the release event, 
