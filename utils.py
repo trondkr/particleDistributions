@@ -25,21 +25,29 @@ def get_paths(polygons = None,experiment = 1):
     return [base+'/Kelp_polygon_%s_experiment_%s_%s_to_%s.nc' % (polygon, experiment, 
                 startdate, enddate) for polygonIndex, polygon in enumerate(polygons)] 
 
-def is_sedimented(d,n):
-    arr = np.ma.masked_invalid(d.dif_depth[n].values)
-    s = np.ma.masked_greater(arr,sed_crit)    
-    if s.count() == 0:
-        return False
-    else: 
-        return True 
+#def is_sedimented(d,n):
+#    arr = np.ma.masked_invalid(d.dif_depth[n].values)
+#    s = np.ma.masked_greater(arr,sed_crit)    
+#    if s.count() == 0:
+#        return False
+#    else: 
+#        return True 
 
-def get_sed_depth2(d):
+def first_n_nan(arr):
+    return np.ma.flatnotmasked_edges(arr)[0] 
+    
+def get_start_sed_depth(d):
+    # Start - first non nan in array
     arr = np.ma.masked_invalid(d.dif_depth.values)
-    s = np.ma.masked_greater(arr,sed_crit)    
-    if s.count() == 0:
+    start =  first_n_nan(arr)    
+    # Sed - first non nan in arr where dif > 0.2 masked
+    arr2 = np.ma.masked_greater(arr,sed_crit)  
+    if arr2.count() == 0:
         return None
     else: 
-        return d.z[first_n_nan(s)].values
+        sed = first_n_nan(arr2) 
+        sed_depth = d.z[sed].values
+        return [start,sed,sed_depth]
 
 def get_sed_depth(d,n):
     return d.z[n][get_sed(d,n)]
@@ -50,18 +58,6 @@ def get_start(d,n):
     arr = np.ma.masked_invalid(d.dif_depth[n].values)
     return first_n_nan(arr)
 
-def get_start2(d):
-    # find index of the release event, 
-    # first non masked element
-    arr = np.ma.masked_invalid(d.dif_depth.values)
-    return first_n_nan(arr)
-
-def get_sed2(d,start = None):  
-    if start == None:
-        start = get_start2(d)
-    arr = np.ma.masked_greater(d.dif_depth.values[start:],sed_crit)    
-    return first_n_nan(arr)
-
 def get_sed(d,n,start = None):  
     if start == None:
         start = get_start(d,n)
@@ -70,25 +66,6 @@ def get_sed(d,n,start = None):
     # mask non-sedimented particles
     arr = np.ma.masked_greater(d.dif_depth[n].values[start:],sed_crit)    
     return first_n_nan(arr)
-
-def get_start_sed(d):
-    # find index of the release event, 
-    # first non masked element
-    arr = np.ma.masked_invalid(d.dif_depth.values)
-    # find index in array of sedimentations time 
-    # first time when difference between seafloor 
-    # mask non-sedimented particles
-    arr2 = np.ma.masked_greater(arr,sed_crit)  
-
-    if (arr.count() > 0 and arr2.count() > 0):
-        start = first_n_nan(arr)
-        sed =  first_n_nan(arr2)
-        return start,sed
-    else:
-        return None,None
-
-def first_n_nan(arr):
-    return np.ma.flatnotmasked_edges(arr)[0] 
 
 def get_lat(d,n):
     # find lat of the particle at the sedimentation time 
