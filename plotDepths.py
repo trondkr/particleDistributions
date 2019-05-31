@@ -21,9 +21,7 @@ def plt_part(df,p_part,col,axis,norm):
     d['dif_depth'] =  d.sea_floor_depth_below_sea_level - d.z     
 
     grp = d.groupby('trajectory')
-    parts = d.coords['trajectory'].values
-   
-    loop  = [[utils.get_start_sed_depth(d),n,d] for n,d in grp if utils.get_start_sed_depth(d) != None]
+    loop  = [[utils.get_start_sed_depth(d),n,d] for n,d in grp if utils.get_start_sed_depth(d) != (None,None,None)]
 
     s  =            list(map(lambda x : x[0], loop))  
     trajectories  = list(map(lambda x : x[1], loop))   
@@ -35,7 +33,6 @@ def plt_part(df,p_part,col,axis,norm):
 
     for k,ds in enumerate(ds_all):  # loop over trajectories 
         start,sed = starts[k],seds[k]
-
         if start != sed:   
             if norm == True:
                 #lifetime = ds.time[stop].values - ds.time[start].values

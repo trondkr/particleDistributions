@@ -49,19 +49,20 @@ def create_map():
     mymap.drawcoastlines()
     return mymap
 
-def get_pos(paths,kelpType): 
-    lats,lons = [],[]
-    for path in paths:
-        df = xr.open_dataset(path)
+def get_sed_pos(paths,kelpType): 
+    with xr.open_mfdataset(paths,concat_dim='time') as ds: #
+        df = ds.load()
+        df = df.where(df.status > -1, drop = True)  
+        df['z'] = df['z'] * -1.        
+
         # Function can plot either all kelp types or one 
         if kelpType != 'All':
-            df = df.where(df.plantpart == kelpType,drop = True)     
-        df = df.where(df.status > -1, drop = True)   
-        #d = df.groupby(df.trajectory).apply(find_depth)   
-        d = utils.get_groups(new_df = df, p_part = kelpType)
-        parts = range(0,len(d.trajectory)-1)
-        lats.extend([utils.get_lat(d,n).values for n in parts if utils.is_sedimented(d,n)])
-        lons.extend([utils.get_lon(d,n).values for n in parts  if utils.is_sedimented(d,n)])   
+            d = df.where(df.plantpart == kelpType,drop = True)     
+        d['dif_depth'] =  d.sea_floor_depth_below_sea_level - d.z     
+        grp = d.groupby('trajectory')
+        loop  = [utils.get_latlon(d) for n,d in grp if utils.get_latlon(d) != None]
+        lats = list(map(lambda x : x[0], loop))  
+        lons = list(map(lambda x : x[1], loop)) 
     return lats,lons
 
 def createBins(res):
@@ -102,18 +103,12 @@ def createBins(res):
 
     return xi,yi #,ngridx,ngridy
 
-#def get_bins(l,nbins):
-#    db = 1.e-6 # bin padding    
-#    return np.linspace(min(l)-db, max(l)+db, nbins)
-
 def get_density(lats, lons,nlevels,cmap):
     # compute appropriate bins to chop up the data: 
-    #lon_bins = get_bins(lons,nbins)
-    #lat_bins = get_bins(lats,nbins)
 
     lon_bins,lat_bins = createBins(res = 1)   
-
     density, _, _ = np.histogram2d(lats, lons, [lat_bins, lon_bins])
+
     # mask 0 density if needed
     density = ma.masked_where(density == 0, density)
 
@@ -129,7 +124,7 @@ def get_density(lats, lons,nlevels,cmap):
 
 def make_map(paths,kelpType,type,experiment,polygons):
     mymap = create_map()
-    lats,lons = get_pos(paths,kelpType)
+    lats,lons = get_sed_pos(paths,kelpType)
 
     if type == 'heatmap':
         nlevels = 50        
@@ -145,10 +140,7 @@ def make_map(paths,kelpType,type,experiment,polygons):
         x,y = mymap(lons,lats)
         mymap.scatter(x,y,alpha = 0.5,c = 'k',s = 10)
         figname = r'{}_for_kelp_type_{}_polygons_{}_experiment_{}.png'.format(type,kelpType,polygons,experiment)         
-    #plt.show()
     plt.savefig(figname,format = 'png',dpi = 300)
-
-
 
 def call_make_map(kelpType,plot_type,experiments,polygons):
     if len(experiments) > 1:
@@ -169,7 +161,7 @@ if __name__ == "__main__":
 
     # 2)
     #Will create map for Kelp 1, polygon 1, all experiment 
-    call_make_map(kelpType = 1,plot_type = 'heatmap',experiments = (1,2,3,4,5), polygons = [1]) # 'All')
+    call_make_map(kelpType = 1,plot_type = 'heatmap',experiments = [1,2,3,4,5], polygons = [1]) # 'All') #,2,3,4,5
 
     # 3)
     #Will create map for Kelp 1, polygon 1, all experiment
