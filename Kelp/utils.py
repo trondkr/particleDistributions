@@ -1,7 +1,7 @@
 import geopandas
 import xarray as xr
 import numpy as np
-import pandas as pd
+
 #criteria to find sedimentation event
 sed_crit = 0.1
 
@@ -12,14 +12,14 @@ ranges = {1:['01052016','01082016'],2:['01032016','15052016'],
 def get_polygons():
     shapefile = r'Shapefile/Shapefile05112018/kelpExPol_11sept2018.shp'
     s = geopandas.read_file(shapefile)
-    return(s.index.values[:-2] + 1)
+    return(s.index.values[2:-2] + 1)
 
 def get_paths(polygons = None,experiment = 1):
     if polygons is None:
         polygons = get_polygons()
     elif polygons is 'All':
         polygons = get_polygons()        
-
+    
     startdate,enddate = ranges[experiment]
     base= r'results15012019' 
     return [base+'/Kelp_polygon_%s_experiment_%s_%s_to_%s.nc' % (polygon, experiment, 
@@ -33,19 +33,13 @@ def get_paths(polygons = None,experiment = 1):
 #    else: 
 #        return True 
 
-def first_n_nan2(arr):
-    return pd.DataFrame(arr.T).apply(pd.Series.first_valid_index).values.astype(int)
-
-def last_n_nan2(arr):
-    return pd.DataFrame(arr.T).apply(pd.Series.last_valid_index).values.astype(int)
-
 def first_n_nan(arr):
-    return np.ma.flatnotmasked_edges(arr)[0]
-
-def get_start_sed_depth(diff,z,traj):
+    return np.ma.flatnotmasked_edges(arr)[0] 
+    
+def get_start_sed_depth(d):
 
     # Start - first non nan in array
-    arr = np.ma.masked_invalid(diff[traj,:])
+    arr = np.ma.masked_invalid(d.dif_depth.values)
     start =  first_n_nan(arr)   
 
     # Sed - first non nan in arr where dif > 0.2 masked
@@ -54,28 +48,9 @@ def get_start_sed_depth(diff,z,traj):
         return None,None,None
     else: 
         sed = first_n_nan(arr2) 
-        sed_depth = z[traj,sed]
-    
+        sed_depth = d.z[sed].values
         return [start,sed,sed_depth]
 
-def get_start_sed_depth2(diff,):
-
-    # Start - first non nan in array
-    arr = np.ma.masked_invalid(diff)
-    start = first_n_nan(arr)
-
-    start =  np.ma.masked_where(start<0, start)  
-   
-    # Sed - first non nan in arr where dif > 0.2 masked
-    arr2 = np.ma.masked_greater(arr,sed_crit)  
-    if arr2.count() == 0:
-        return None,None,None
-    else: 
-        sed = last_n_nan(arr2) 
-        sed2 =  np.where(sed<0, 2208,sed)  
-    
-        sed_depth = d.z[:,sed2].values
-        return [start,sed,sed_depth]
 
 def get_lat(d,n):
     # find lat of the particle at the sedimentation time 
@@ -113,6 +88,8 @@ def get_sed(d,n,start = None):
     # mask non-sedimented particles
     arr = np.ma.masked_greater(d.dif_depth[n].values[start:],sed_crit)    
     return first_n_nan(arr)
+
+
 
 def get_dif_depth(data):
     # find differences between floor depth and particle depth for each trajectory     

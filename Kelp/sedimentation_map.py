@@ -15,7 +15,8 @@ from netCDF4 import Dataset, date2num,num2date
 from scipy.ndimage.filters import gaussian_filter
 from matplotlib.colors import BoundaryNorm
 from matplotlib.ticker import MaxNLocator
-import animateScatter
+#import ogr
+#import osr
 import time
 import utils
 
@@ -30,10 +31,10 @@ def find_depth(data):
     data['dif_depth'] =  data.sea_floor_depth_below_sea_level - data.z 
     return data
 
-def get_groups(new_df,p_part):
+'''def get_groups(new_df,p_part):
     d = new_df.where(new_df.plantpart == p_part,drop = True)
     # apply method to each trajectory (particle release event)
-    return d.groupby(d.trajectory).apply(find_depth)
+    return d.groupby(d.trajectory).apply(find_depth)'''
 
 def create_map():
     fig = plt.figure(figsize=(10,10), frameon=False)
@@ -46,62 +47,69 @@ def create_map():
     #mymap.drawmapboundary(fill_color='#677a7a')
     mymap.fillcontinents(color='#b8a67d',zorder=2)
     mymap.drawcoastlines()
-    return mymap, ax
+    return mymap
 
-def get_pos(paths,kelpType):      
-    df = xr.open_mfdataset(paths,concat_dim='trajectory')
-    if kelpType != 'All':
-        df = df.where(df.plantpart == kelpType,drop = True)     
-    df = df.where(df.status > -1, drop = True)
-    d = df.groupby(df.trajectory).apply(find_depth)
-    parts = range(0,len(d.trajectory)-1)
-    lats = [utils.get_lat(d,n).values for n in parts if utils.is_sedimented(d,n)]
-    lons = [utils.get_lon(d,n).values for n in parts if utils.is_sedimented(d,n)]        
+def get_sed_pos(paths,kelpType): 
+    with xr.open_mfdataset(paths,concat_dim='time') as ds: #
+        df = ds.load()
+        df = df.where(df.status > -1, drop = True)  
+        df['z'] = df['z'] * -1.        
+
+        # Function can plot either all kelp types or one 
+        if kelpType != 'All':
+            d = df.where(df.plantpart == kelpType,drop = True)     
+        d['dif_depth'] =  d.sea_floor_depth_below_sea_level - d.z     
+        grp = d.groupby('trajectory')
+        loop  = [utils.get_latlon(d) for n,d in grp if utils.get_latlon(d) != None]
+        lats = list(map(lambda x : x[0], loop))  
+        lons = list(map(lambda x : x[1], loop)) 
     return lats,lons
 
-def distance(lat1, lon1, lat2, lon2):
-    p = 0.017453292519943295     #Pi/180
-    a = 0.5 - np.cos((lat2 - lat1) * p)/2 + np.cos(lat1 * p) * np.cos(lat2 * p) * (1 - np.cos((lon2 - lon1) * p)) / 2
-    return 12742 * np.arcsin(np.sqrt(a))
-
-def createBins(requiredResolution=0.25):
-
+def createBins(res):
     print('func: createBins() => Creating bins for averaging')
     xmin=15.0; xmax=21.0
     ymin=69.0; ymax=72.0
-   
-    dy = distance(ymin,xmin,ymax,xmin)
-    dx = distance(ymin,xmin,ymin,xmax)
 
+    deg2rad=np.pi/180.
+    R = 6371  # radius of the earth in km
+    # Distance from minimum to maximim longitude
+    def get_dist(xx,yy): 
+        return R * np.sqrt( xx**2 + yy**2 )
+
+    def rad(var):
+        return var*deg2rad
+
+    xmaxrad = xmax*deg2rad
+    xminrad = xmin*deg2rad
+    ymaxrad = ymax*deg2rad
+    yminrad = ymin*deg2rad   
+
+    dx = get_dist((xmaxrad - xminrad) * np.cos(ymaxrad),0)
+    # number of kilometers .Then if res is 1 we get 1 km resolution 
     print("Distance from minimum to maximim longitude binned area is %s km"%(dx))
+
+    # Distance from minimum to maximim latitude
+    dy = get_dist(0,ymaxrad-yminrad)   
     print("Distance from minimum to maximim latitude binned area is %s km"%(dy))
-    
-    delta = int(np.round(dx/requiredResolution,0))
-    print("delta {}".format(delta))
-    xi = np.linspace(np.floor(xmin),np.ceil(xmax),delta)
-    deltaX=abs(xi[0]-xi[1])
-    print(deltaX)
 
-    # We are only using longitude to calculate the approximate distance in degrees 
-    # that is equvalent to requiredResolsution. Then we create latitude grid based on the 
-    # same deltaX.
-    yi = np.arange(np.floor(ymin),np.ceil(ymax),deltaX)
+    ngridx = int(dx/res)
+    ngridy = int(dy/res)
 
-    print('=> created binned array of domain of grid cell size (%s) with resolution %s'%(delta,requiredResolution))
-    
-    return xi,yi,deltaX
+    db = 1.e-6 # bin padding     
+    xi = np.linspace(xmin-db,xmax+db,ngridx)
+    yi = np.linspace(ymin-db,ymax+db,ngridy)
 
-#def get_bins(l,nbins):
-#    db = 1.e-6 # bin padding    
-#    return np.linspace(min(l)-db, max(l)+db, nbins)
+    print('=> created binned array of domain of size (%s,%s) with resolution %s'%(ngridx,ngridy,res))
 
+    return xi,yi #,ngridx,ngridy
 
 def get_density(lats, lons,nlevels,cmap):
+    # compute appropriate bins to chop up the data: 
 
-    requiredResolution=1
-    lon_bins,lat_bins,deltaDegrees = createBins(requiredResolution)   
-
+    lon_bins,lat_bins = createBins(res = 1)   
     density, _, _ = np.histogram2d(lats, lons, [lat_bins, lon_bins])
+
+    # mask 0 density if needed
     density = ma.masked_where(density == 0, density)
 
     levels = MaxNLocator(nbins=nlevels).tick_values(0,100)
@@ -115,29 +123,24 @@ def get_density(lats, lons,nlevels,cmap):
     return lon_bins_2d,lat_bins_2d,density,norm
 
 def make_map(paths,kelpType,type,experiment,polygons):
-    mymap, ax = create_map()
-    lats,lons = get_pos(paths,kelpType)
+    mymap = create_map()
+    lats,lons = get_sed_pos(paths,kelpType)
 
     if type == 'heatmap':
         nlevels = 50        
         cmap = plt.get_cmap('Spectral_r')        
         lon_bins_2d,lat_bins_2d,density,norm = get_density(lats, lons,nlevels,cmap)
         xs, ys = mymap(lon_bins_2d, lat_bins_2d) # will be plotted using pcolormesh          
-        cs = mymap.pcolormesh(xs, ys, density, cmap=cmap, norm=norm)     
-        polygons = animateScatter.KelpPolygons(mymap,ax,fill=False)
- 
+        cs = mymap.pcolormesh(xs, ys, density, cmap=cmap, norm=norm)      
         plt.colorbar(cs, shrink=0.7)
         figname = r'{}_for_kelp_type_{}_polygons_{}_experiment_{}.png'.format(type,kelpType,polygons,str(experiment)) 
-     
+        #TODO:convert to tiff
 
     elif type == 'scatter':
         x,y = mymap(lons,lats)
         mymap.scatter(x,y,alpha = 0.5,c = 'k',s = 10)
         figname = r'{}_for_kelp_type_{}_polygons_{}_experiment_{}.png'.format(type,kelpType,polygons,experiment)         
-
     plt.savefig(figname,format = 'png',dpi = 300)
-
-
 
 def call_make_map(kelpType,plot_type,experiments,polygons):
     if len(experiments) > 1:
@@ -155,13 +158,10 @@ if __name__ == "__main__":
     # 1 ) 
     # takes  20 seconds   
     #call_make_map(kelpType = 1,plot_type = 'heatmap',experiments = [1], polygons = [1]) # 'All')
-    alltypes = (0,1,2,4)  
-    experiments = (1,2,3,4,5)
+
     # 2)
     #Will create map for Kelp 1, polygon 1, all experiment 
-    for experiment in experiments:
-        for kelpType in alltypes:
-            call_make_map(kelpType = kelpType,plot_type = 'heatmap',experiments = [experiment], polygons = 'All') # 'All')
+    call_make_map(kelpType = 1,plot_type = 'heatmap',experiments = [1,2,3,4,5], polygons = [3,4,5]) # 'All') #,2,3,4,5
 
     # 3)
     #Will create map for Kelp 1, polygon 1, all experiment

@@ -4,6 +4,8 @@ import numpy as np
 from matplotlib.pyplot import cm 
 from mpl_toolkits.basemap import Basemap
 import sys
+import ogr
+import osr
 import matplotlib.path as mpath
 import matplotlib.patches as mpatches
 from matplotlib.collections import PatchCollection
@@ -11,8 +13,6 @@ import animateScatter
 import xarray as xr
 import laplacefilter
 import mpl_util
-import pandas as pd
-
 class Tracks(object):
     """An animated scatter plot using matplotlib.animations.FuncAnimation."""
     def __init__(self,lons,lats,z,figname):
@@ -29,31 +29,15 @@ class Tracks(object):
         self.mymap = Basemap(llcrnrlon=self.llcrnrlon, llcrnrlat=self.llcrnrlat,
                     urcrnrlon=self.urcrnrlon, urcrnrlat=self.urcrnrlat,resolution='h', 
                     projection='merc')
-        #self.mymap.shadedrelief(zorder=2)
+        self.mymap.shadedrelief()
         self.mymap.fillcontinents(color='#b8a67d',zorder=2)
-        self.mymap.drawcoastlines(zorder=2)
+        self.mymap.drawcoastlines()
 
         etopo = self.addBathymetry()
-        polygons = animateScatter.KelpPolygons(self.mymap,self.ax)
+        olygons = animateScatter.KelpPolygons(self.mymap,self.ax)
        
         self.x,self.y=self.mymap(lons,lats)
 
-    def to_plot(self,d,start,sed,traj):
-        
-        l = np.ma.masked_greater(d.lon.values[traj,start:sed+1],100)  
-        lons = pd.Series(l).dropna()
-
-        l = np.ma.masked_greater(d.lat.values[traj,start:sed+1],100)  
-        lats = pd.Series(l).dropna()
-
-        self.mymap.plot(lons.values,lats.values,linewidth = 0.2,
-                latlon = True,alpha = 0.4, color='lightgray',zorder=5) 
-
-        self.mymap.plot(lons.values[-1],lats.values[-1],'ko', markersize = 1.2,
-                latlon = True,alpha = 0.7, zorder=10)        
-        self.mymap.plot(lons.values[0],lats.values[0],'ro', markersize = 1.2,
-                latlon = True,alpha = 0.7,zorder=10)                               
-      
     def plot_tracks(self):
 
         for traj_index in range(len(self.x[:,0])):
@@ -82,7 +66,7 @@ class Tracks(object):
                        cmap=mpl_util.LevelColormap(levels,cmap=cm.Blues_r),
                        extend='upper',
                        alpha=1.0,
-                       origin='lower',zorder=1)
+                       origin='lower')
     
     
     def findSubsetIndices(self,min_lat,max_lat,min_lon,max_lon,lats,lons):

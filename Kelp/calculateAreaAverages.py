@@ -109,7 +109,7 @@ def plotDistribution(kelpData,week,baseout,xii,yii,distType,polygons,experiment,
     #levels = np.arange(0,10,0.1)
     levels=np.linspace(1,np.max(z)/3,20)
     #cblevels = np.arange(0,10,5)    
-    CS1 = mymap.contourf(x,y,z,vmin = 1,vmax = np.max(z)/3, levels = 100, cmap=cm.get_cmap('Spectral_r'), extend='max') 
+    CS1 = mymap.contourf(x,y,z,vmin = 1,vmax = np.max(z)/2, levels = 100, cmap=cm.get_cmap('Spectral_r'), extend='max') 
     #levels,,len(levels)-1 Spectral_r #, alpha=1.0levels
     #CS2 = mymap.contour(x,y,z,[1], colors = 'k',linewidths = 0.1)
 
@@ -129,53 +129,7 @@ def plotDistribution(kelpData,week,baseout,xii,yii,distType,polygons,experiment,
     print("=> Creating plot %s"%(plotfile))             
     plt.savefig(plotfile,dpi=300)
  
-
-def writeToAsciiRaster(dataarray,gisfile,requiredResolution,lons,lats,deltaDegrees):
-    """Write data to ascii file"""
-    
-    if os.path.exists(gisfile): os.remove(gisfile)
-    f = open(gisfile,'a')
-
-    z = np.fliplr(np.rot90(dataarray,3)) 
-
-    # Write the results to an ascii file suitable for arcgis input"""
-    cellsize         =deltaDegrees
-    Xlowerleftcorner =lons.min()
-    Ylowerleftcorner =lats.min()
-    nodataValue="-9999.0"
-
-    # All the latitude/longitude values given here indicate the mid-point of the
-    # location where the value is found. Therefore, to correctly position the cell, we
-    # regard the minimum long/lat point as the mid-point and write the lower left corner as
-    # half a cellsize down from mid-point.
-
-    x_range=np.shape(z)[0]
-    y_range=np.shape(z)[1]
-
-    header1='ncols %i \n'%(x_range)
-    header2='nrows %i \n'%(y_range)
-    header3='xllcorner %.5f \n'%((Xlowerleftcorner) + (requiredResolution/2.0))
-    header4='yllcorner %.5f \n'%((Ylowerleftcorner) + (requiredResolution/2.0))
-    header5='cellsize %.5f \n'%(cellsize)
-    header6='NODATA_VALUE %s \n'%(nodataValue)
-
-    f.writelines(header1)
-    f.writelines(header2)
-    f.writelines(header3)
-    f.writelines(header4)
-    f.writelines(header5)
-    f.writelines(header6)
-
-    for y in range(y_range):
-        for x in range(x_range):
-          #  if y > 1 and y < y_range-1 and x > 1 and x < x_range-1:
-          #      print("delta dx {} dy {}".format(lons[x,y]-lons[x,y-1],lats[x,y]-lats[x-1,y]))
-            d='%f\t'%(z[x,(y_range-1)-y])
-            f.writelines(d)
-
-    f.close()
-
-
+ 
 def writeToAscii(dataarray,xyzfile,requiredResolution,lons,lats,deltaDegrees):
     """Write data to ascii file"""
     
@@ -197,6 +151,49 @@ def writeToAscii(dataarray,xyzfile,requiredResolution,lons,lats,deltaDegrees):
 
     f.close()
 
+def writeToAsciiRaster(dataarray,gisfile,requiredResolution,lons,lats,deltaDegrees):
+    """Write data to ascii file"""
+    
+    if os.path.exists(gisfile): os.remove(gisfile)
+    f = open(gisfile,'a')
+
+    # Write the results to an ascii file suitable for arcgis input"""
+    cellsize         =deltaDegrees
+    Xlowerleftcorner =lons.min()
+    Ylowerleftcorner =lats.min()
+    nodataValue="-9999.0"
+
+    # All the latitude/longitude values given here indicate the mid-point of the
+    # location where the value is found. Therefore, to correctly position the cell, we
+    # regard the minimum long/lat point as the mid-point and write the lower left corner as
+    # half a cellsize down from mid-point.
+
+    x_range=np.shape(dataarray)[0]
+    y_range=np.shape(dataarray)[1]
+
+    header1='ncols %i \n'%(x_range)
+    header2='nrows %i \n'%(y_range)
+    header3='xllcorner %.5f \n'%((Xlowerleftcorner) + (requiredResolution/2.0))
+    header4='yllcorner %.5f \n'%((Ylowerleftcorner) + (requiredResolution/2.0))
+    header5='cellsize %.5f \n'%(cellsize)
+    header6='NODATA_VALUE %s \n'%(nodataValue)
+
+    f.writelines(header1)
+    f.writelines(header2)
+    f.writelines(header3)
+    f.writelines(header4)
+    f.writelines(header5)
+    f.writelines(header6)
+
+    for y in range(y_range):
+        for x in range(x_range):
+          #  if y > 1 and y < y_range-1 and x > 1 and x < x_range-1:
+          #      print("delta dx {} dy {}".format(lons[x,y]-lons[x,y-1],lats[x,y]-lats[x-1,y]))
+            d='%f\t'%(dataarray[x,(y_range-1)-y])
+            f.writelines(d)
+
+    f.close()
+
 def getResultNames(distType,kelpType,experiment):
     if distType == "integrated":
         plotfile=baseout+'/Kelp_distribution_all_fullperiod_kelpType{}_experiment_{}.png'.format(kelpType,experiment)
@@ -208,7 +205,9 @@ def getResultNames(distType,kelpType,experiment):
         xyzfile=baseout+'/Kelp_distribution_all_week_'+str(week)+'polygons_{}-{}'.format(min(polygons),max(polygons))+'kelpType_{}.xyz'.format(kelpType)
     return plotfile, gisfile, xyzfile
 
+
 def main(shapefile,requiredResolution,experiment,distType,polygons = None,kelpType = None, showGrid = None):
+    
     
     # Which species to calculate for
     # The timespan is part of the filename
@@ -221,7 +220,7 @@ def main(shapefile,requiredResolution,experiment,distType,polygons = None,kelpTy
 
     if polygons == None:
         polygons = utils.get_polygons()
-        print(polygons)
+
     #Created final array for all data of size : (17, 52, 205, 333)
     # 17 polygons in shapefile , 52 dimension for weeks, xi,yi - bins 
     allData=np.zeros((len(polygons),weeksInYear,len(xi)-1,len(yi)-1))
@@ -229,7 +228,7 @@ def main(shapefile,requiredResolution,experiment,distType,polygons = None,kelpTy
     infiles = utils.get_paths(polygons,experiment)
    
     plotfile, gisfile, xyzfile = getResultNames(distType,kelpType,experiment)
-    print("Kelptype {}".format(kelpType))
+
     for polygonIndex,path in enumerate(infiles):   
         if os.path.exists(path):
             #print("=> Opening input file: %s"%(path))
@@ -262,7 +261,7 @@ def main(shapefile,requiredResolution,experiment,distType,polygons = None,kelpTy
         plotDistribution(kelpData,week,baseout,xii,yii,"integrated",polygons,experiment,plotfile,showGrid)
   
     np.ma.set_fill_value(kelpData,-9999.0)
-  #  writeToAsciiRaster(kelpData.filled(),gisfile,requiredResolution,xii,yii,deltaDegrees)
+    #writeToAsciiRaster(kelpData.filled(),gisfile,requiredResolution,xii,yii,deltaDegrees)
     writeToAscii(kelpData.filled(),xyzfile,requiredResolution,xii,yii,deltaDegrees)
 
 if __name__ == "__main__":
@@ -288,7 +287,7 @@ if __name__ == "__main__":
     # kelpType is the parameter for chosing, the type of kelp (differs by density?)
     # available types are 0,1,2,4; -32767 is used for masking in the nc file ,
     #  None can be used for all types       
-    requiredResolution=1 # km
+    requiredResolution=1. # km
 
     polygons = None 
     #polygons = (1,2,3) # #None means all polygons, otherwise create a list of needed polygons 
@@ -298,13 +297,11 @@ if __name__ == "__main__":
     # 'weekly' to plot separately positions during all weeks in the recorded time range 
 
     #requiredResolution = 1   Resolution of the data, used in creating bins 
-    for experiment in experiments:
-        for kelpType in alltypes:
+    main(shapefile, requiredResolution, experiment = 1, distType = distType,polygons = polygons, kelpType = 1, showGrid=showGrid)
 
-            main(shapefile, requiredResolution, experiment = experiment, distType = distType,polygons=polygons, kelpType=kelpType, showGrid=showGrid)
-
-    #        kelpType = kelpType
-    #        [main(shapefile,experiment = e, distType = distType,polygons = polygons,
-    #    requiredResolution = 1,kelpType = kelpType) for e in experiments]'''
+    '''for kelpType in alltypes:
+        kelpType = kelpType
+        [main(shapefile,experiment = e, distType = distType,polygons = polygons,
+        requiredResolution = 1,kelpType = kelpType) for e in experiments]'''
 
     print("---  It took %s seconds to run the script ---" % (time.time() - start_time))   

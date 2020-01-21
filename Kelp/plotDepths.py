@@ -75,28 +75,29 @@ def call_make_plot_mf(paths,experiment,normalize):
     ax3   = fig.add_subplot(gs[4])
     ax3_1 = fig.add_subplot(gs[5])
 
-    df = xr.open_mfdataset(paths,concat_dim='time')
+    with xr.open_mfdataset(paths,concat_dim='time') as ds: #
+        df = ds.load()
     #df = xr.open_mfdataset(paths,concat_dim='time')
     df = df.where(df.status > -1, drop = True)
     df['z'] = df['z'] * -1.
-   
+
     sed_depths1 = plt_part(df,1,'#d65460',ax1,normalize) 
     sed_depths2 = plt_part(df,2,'g',ax2,normalize)
     sed_depths4 = plt_part(df,4,'#006080',ax3,normalize)        
 
     bins = np.arange(1,200,10)
 
-    ax1_1.hist(sed_depths1,bins = bins,density = True,color = 'r')   
-    ax2_1.hist(sed_depths2,bins = bins,density = True,color = 'r')   
-    ax3_1.hist(sed_depths4,bins = bins,density = True,color = 'r')
+    ax1_1.hist(sed_depths1,bins = bins,density = True,color = 'k')   
+    ax2_1.hist(sed_depths2,bins = bins,density = True,color = 'k')   
+    ax3_1.hist(sed_depths4,bins = bins,density = True,color = 'k')
 
     for axis2 in (ax1_1,ax2_1,ax3_1):  
         axis2.set_title('Sedimentation depths')    
         axis2.set_xlim(0,200)  
-    if normalize == True:
-        plt.savefig('Figures/Kelp_trajectories_and_sedimentation_norm_experiment{}.png'.format(experiment),format = 'png')
-    else:
-        plt.savefig('Figures/Kelp_trajectories_and_sedimentation.png',format = 'png')            
+    #if normalize == True:
+    #    plt.savefig('Figures/Kelp_trajectories_and_sedimentation_norm_experiment{}.png'.format(experiment),format = 'png')
+    #else:
+    #    plt.savefig('Figures/Kelp_trajectories_and_sedimentation.png',format = 'png')            
     print("---  It took %s seconds to run the script ---" % (time.time() - start_time))        
     plt.show()
 
@@ -105,10 +106,10 @@ if __name__ == '__main__':
     pol = utils.get_polygons()
     experiments = (1,2,3,4,5)
     #paths = utils.get_paths(polygons,experiment = 1)
-    allpaths = (glob.glob("results15012019/*.nc"))
+    allpaths = (glob.glob("Data/*.nc"))
     
-    for exp in experiments:
-        call_make_plot_mf(utils.get_paths(pol,experiment = exp),experiment = exp,normalize = False) 
+    #for exp in experiments:
+    #    call_make_plot_mf(utils.get_paths(pol,experiment = exp),experiment = exp,normalize =True) 
     #call_make_plot_mf(utils.get_paths(pol,experiment = 2),experiment = 2,normalize =True)
 
-    #call_make_plot_mf(utils.get_paths(pol,experiment = 5),experiment = 5,normalize = False)   
+    call_make_plot_mf(utils.get_paths(pol,experiment = 5),experiment = 5,normalize =True)   
